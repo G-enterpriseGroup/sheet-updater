@@ -1,11 +1,21 @@
 # Authenticate
+import os
 import gspread
 from google.oauth2.service_account import Credentials
-import os
 
-creds = Credentials.from_service_account_file(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
+# Define necessary OAuth scopes
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
+# Load service account credentials with scopes
+creds = Credentials.from_service_account_file(
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"],
+    scopes=SCOPES
+)
+# Authorize gspread client
 gc = gspread.authorize(creds)
-
 
 import yfinance as yf
 import pandas as pd
@@ -55,7 +65,7 @@ for ticker in tickers:
         parts.append(calculate_max_loss(price, puts, exp))
     df = pd.concat(parts, ignore_index=True)
     df["Expiration Date"] = pd.to_datetime(df["Expiration Date"])
-    df = df.sort_values(["Expiration Date","Max Loss (Ask)"]).reset_index(drop=True)
+    df = df.sort_values(["Expiration Date","Max Loss (Ask)"].reset_index(drop=True)
     df[df.select_dtypes(include="number").columns] = df.select_dtypes(include="number").round(2)
 
     # Delete and recreate ticker sheet
@@ -130,7 +140,7 @@ for ticker in tickers:
             "strike":                row["strike"],
             "Expiration Date":       row["Expiration Date"].date(),
             "Days Until Expiration": int(row["Days Until Expiration"]),
-            "Max Loss (Ask)":        float(row["Max Loss (Ask)"]),
+            "Max Loss (Ask)":        float(row["Max Loss (Ask)" ]),
             "Max Loss (Last)":       float(row["Max Loss (Last)"])
         })
 
@@ -220,4 +230,3 @@ if summary_rows:
     spreadsheet.batch_update({"requests": req2})
 
 print("✅ All sheets and Summary updated with dynamic ticker colors")
-
