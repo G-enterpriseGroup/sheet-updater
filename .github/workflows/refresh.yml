@@ -2,7 +2,7 @@ name: Refresh Sheets
 
 on:
   schedule:
-    - cron: '*/15 13-20 * * 1-5'
+    - cron: '*/15 13-20 * * 1-5'  # Every 15 min 1 PM–8 PM UTC, Mon–Fri
   workflow_dispatch:
 
 jobs:
@@ -18,15 +18,12 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        working-directory: sheet-updater
         run: pip install -r requirements.txt
 
       - name: Write service account key
-        working-directory: sheet-updater
         run: echo '${{ secrets.SA_KEY }}' > sa.json
 
       - name: Run updater
-        working-directory: sheet-updater
         env:
           GOOGLE_APPLICATION_CREDENTIALS: sa.json
           SHEET_URL: ${{ secrets.SHEET_URL }}
