@@ -1,0 +1,32 @@
+name: Refresh Sheets
+
+on:
+  schedule:
+    # Every 15 min Mon–Fri, 9 AM–4 PM Eastern is 13–20 UTC
+    - cron:  '*/15 13-20 * * 1-5'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          pip install yfinance gspread pandas gspread-formatting gspread-dataframe
+
+      - name: Write service account key
+        run: |
+          echo "${{ secrets.SA_KEY }}" > /github/workspace/sa.json
+
+      - name: Run updater
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /github/workspace/sa.json
+          SHEET_URL: ${{ secrets.SHEET_URL }}
+        run: |
+          python update_sheets.py
