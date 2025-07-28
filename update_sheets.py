@@ -65,7 +65,8 @@ for ticker in tickers:
         parts.append(calculate_max_loss(price, puts, exp))
     df = pd.concat(parts, ignore_index=True)
     df["Expiration Date"] = pd.to_datetime(df["Expiration Date"])
-    df = df.sort_values(["Expiration Date", "Max Loss (Ask) "]).reset_index(drop=True)
+    # Sort by expiration and max loss (Ask)
+    df = df.sort_values(["Expiration Date", "Max Loss (Ask)"]).reset_index(drop=True)
     df[df.select_dtypes(include="number").columns] = df.select_dtypes(include="number").round(2)
 
     # Delete and recreate ticker sheet
@@ -126,7 +127,7 @@ for ticker in tickers:
             "strike": row["strike"],
             "Expiration Date": row["Expiration Date"].date(),
             "Days Until Expiration": int(row["Days Until Expiration"]),
-            "Max Loss (Ask)": float(row["Max Loss (Ask)" ]),
+            "Max Loss (Ask)": float(row["Max Loss (Ask)"] ),
             "Max Loss (Last)": float(row["Max Loss (Last)"])
         })
 
