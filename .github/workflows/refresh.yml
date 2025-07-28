@@ -25,7 +25,7 @@ jobs:
 
       - name: Run updater
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: /github/workspace/sa.json
+          GOOGLE_APPLICATION_CREDENTIALS: sa.json
           SHEET_URL: ${{ secrets.SHEET_URL }}
         run: |
           python update_sheets.py
