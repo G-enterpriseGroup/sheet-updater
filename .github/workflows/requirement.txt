@@ -1,0 +1,5 @@
+gspread
+pandas
+yfinance
+gspread-formatting
+gspread-dataframe
