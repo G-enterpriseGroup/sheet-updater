@@ -2,15 +2,12 @@ name: Refresh Sheets
 
 on:
   schedule:
-    - cron: '*/15 13-20 * * 1-5'  # Every 15 mins from 1 PM to 8 PM UTC, Mon-Fri
+    - cron: '*/15 13-20 * * 1-5'
   workflow_dispatch:
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sheet-updater  # 👈 key update here
 
     steps:
       - uses: actions/checkout@v3
@@ -21,12 +18,15 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
+        working-directory: sheet-updater
         run: pip install -r requirements.txt
 
       - name: Write service account key
+        working-directory: sheet-updater
         run: echo '${{ secrets.SA_KEY }}' > sa.json
 
       - name: Run updater
+        working-directory: sheet-updater
         env:
           GOOGLE_APPLICATION_CREDENTIALS: sa.json
           SHEET_URL: ${{ secrets.SHEET_URL }}
