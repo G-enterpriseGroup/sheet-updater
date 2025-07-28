@@ -17,8 +17,7 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: |
-          pip install yfinance gspread pandas gspread-formatting gspread-dataframe
+        run: pip install -r requirements.txt
 
       - name: Write service account key
         run: echo '${{ secrets.SA_KEY }}' > sa.json
