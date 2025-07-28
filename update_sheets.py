@@ -1,13 +1,11 @@
-
-
 # Authenticate
-from google.colab import auth
-auth.authenticate_user()
-
 import gspread
-from google.auth import default
-creds, _ = default()
+from google.oauth2.service_account import Credentials
+import os
+
+creds = Credentials.from_service_account_file(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
 gc = gspread.authorize(creds)
+
 
 import yfinance as yf
 import pandas as pd
