@@ -1,5 +1,4 @@
-# Install packages
-!pip install --quiet yfinance gspread pandas gspread-formatting gspread_dataframe
+
 
 # Authenticate
 from google.colab import auth
