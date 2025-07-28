@@ -4,7 +4,7 @@ on:
   schedule:
     # Every 15 min Mon–Fri, 9 AM–4 PM Eastern is 13–20 UTC
     - cron:  '*/15 13-20 * * 1-5'
-
+  workflow_dispatch:
 jobs:
   update:
     runs-on: ubuntu-latest
