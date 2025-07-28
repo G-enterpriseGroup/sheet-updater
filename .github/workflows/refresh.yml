@@ -2,8 +2,9 @@ name: Refresh Sheets
 
 on:
   schedule:
-    - cron:  '*/15 13-20 * * 1-5'
+    - cron:  '*/15 13-20 * * 1-5'  # Every 15 mins during 1 PM to 8 PM UTC, Mon-Fri
   workflow_dispatch:
+
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -20,8 +21,7 @@ jobs:
           pip install yfinance gspread pandas gspread-formatting gspread-dataframe
 
       - name: Write service account key
-        run: |
-          echo "${{ secrets.SA_KEY }}" > /github/workspace/sa.json
+        run: echo '${{ secrets.SA_KEY }}' > /github/workspace/sa.json
 
       - name: Run updater
         env:
