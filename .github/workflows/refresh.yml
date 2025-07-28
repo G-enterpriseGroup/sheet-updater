@@ -21,7 +21,7 @@ jobs:
           pip install yfinance gspread pandas gspread-formatting gspread-dataframe
 
       - name: Write service account key
-        run: echo '${{ secrets.SA_KEY }}' > /github/workspace/sa.json
+        run: echo '${{ secrets.SA_KEY }}' > sa.json
 
       - name: Run updater
         env:
