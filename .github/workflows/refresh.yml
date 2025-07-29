@@ -2,7 +2,7 @@ name: Refresh Sheets
 
 on:
   schedule:
-    - cron: '*/15 13-20 * * 1-5'  # Every 15 min 1 PM–8 PM UTC, Mon–Fri
+    - cron: '*/10 13-20 * * 1-5'  # Every 15 min 1 PM–8 PM UTC, Mon–Fri
   workflow_dispatch:
 
 jobs:
