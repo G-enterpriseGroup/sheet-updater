@@ -46,14 +46,21 @@ def col_letter(n):
 sheet_url = "https://docs.google.com/spreadsheets/d/1uXUn3Tl9Kd3K3gRQuiJhuaVVz5dssGmqaAcIbYD5Zrw/edit"
 spreadsheet = gc.open_by_url(sheet_url)
 
-# Read tickers
+# Read tickers and identify new ones
 tickers_ws = spreadsheet.worksheet("Tickers")
 tickers = [t.strip() for t in tickers_ws.col_values(1) if t.strip()]
+existing_titles = [ws.title for ws in spreadsheet.worksheets()]
+new_tickers = [t for t in tickers if t not in existing_titles]
 
+if not new_tickers:
+    print("✅ No new tickers to process.")
+    exit()
+
+# Prepare summary container
 summary_rows = []
 
-# Process each ticker
-for ticker in tickers:
+# Process each new ticker
+for ticker in new_tickers:
     tk = yf.Ticker(ticker)
     price = tk.history(period="1d")["Close"].iloc[-1]
     parts = []
@@ -65,11 +72,10 @@ for ticker in tickers:
         parts.append(calculate_max_loss(price, puts, exp))
     df = pd.concat(parts, ignore_index=True)
     df["Expiration Date"] = pd.to_datetime(df["Expiration Date"])
-    # Sort by expiration and max loss (Ask)
     df = df.sort_values(["Expiration Date", "Max Loss (Ask)"]).reset_index(drop=True)
     df[df.select_dtypes(include="number").columns] = df.select_dtypes(include="number").round(2)
 
-    # Delete and recreate ticker sheet
+    # Delete and recreate worksheet for ticker
     try:
         spreadsheet.del_worksheet(spreadsheet.worksheet(ticker))
     except Exception:
@@ -81,15 +87,12 @@ for ticker in tickers:
     )
     set_with_dataframe(ws, df)
 
-    # Best row per expiration (closest-to-zero Max Loss (Last))
-    rows_by_exp = {exp: int(sub["Max Loss (Last)"].idxmax()) for exp, sub in df.groupby("Expiration Date")}
-
-    # Prepare batch_update requests
+    # Highlight settings and batch updates
     meta = spreadsheet.fetch_sheet_metadata()["sheets"]
     sid = next(s["properties"]["sheetId"] for s in meta if s["properties"]["title"] == ticker)
     requests = []
 
-    # Hide columns D, F, G, H, K, M
+    # Hide unwanted columns
     for i in [3, 5, 6, 7, 10, 12]:
         requests.append({
             "updateDimensionProperties": {
@@ -111,7 +114,8 @@ for ticker in tickers:
             }
         })
 
-    # Blue-fill selected rows and collect summary
+    # Blue-fill best rows and collect summary entries
+    rows_by_exp = {exp: int(sub["Max Loss (Last)"].idxmax()) for exp, sub in df.groupby("Expiration Date")}
     for ridx in rows_by_exp.values():
         requests.append({
             "repeatCell": {
@@ -127,7 +131,7 @@ for ticker in tickers:
             "strike": row["strike"],
             "Expiration Date": row["Expiration Date"].date(),
             "Days Until Expiration": int(row["Days Until Expiration"]),
-            "Max Loss (Ask)": float(row["Max Loss (Ask)"] ),
+            "Max Loss (Ask)": float(row["Max Loss (Ask)" ]),
             "Max Loss (Last)": float(row["Max Loss (Last)"])
         })
 
@@ -142,8 +146,8 @@ for ticker in tickers:
 
     spreadsheet.batch_update({"requests": requests})
 
-# Create Summary sheet
-if summary_rows:
+# Create or update Summary sheet
+ef summary_rows:
     sum_df = pd.DataFrame(summary_rows)
     try:
         spreadsheet.del_worksheet(spreadsheet.worksheet("Summary"))
@@ -153,7 +157,7 @@ if summary_rows:
     set_with_dataframe(ws2, sum_df)
     ws2.freeze(rows=1)
 
-    # Format Summary with dynamic colors
+    # Color Summary rows by ticker
     meta2 = spreadsheet.fetch_sheet_metadata()["sheets"]
     sid2 = next(s["properties"]["sheetId"] for s in meta2 if s["properties"]["title"] == "Summary")
     palette = [
@@ -164,15 +168,24 @@ if summary_rows:
         {"red":0.8,"green":0.9,"blue":0.7},
         {"red":0.7,"green":0.8,"blue":0.9}
     ]
-    req2 = []
-    # Header
-    req2.append({"repeatCell": {"range": {"sheetId": sid2, "startRowIndex":0, "endRowIndex":1, "startColumnIndex":0, "endColumnIndex":len(sum_df.columns)}, "cell": {"userEnteredFormat": {"backgroundColor": {"red":0.95,"green":0.95,"blue":0.95},"textFormat": {"bold":True}}},"fields":"userEnteredFormat.backgroundColor,userEnteredFormat.textFormat"}})
+    req2 = [{
+        "repeatCell": {
+            "range": {"sheetId": sid2, "startRowIndex": 0, "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": len(sum_df.columns)},
+            "cell": {"userEnteredFormat": {"backgroundColor": {"red":0.95,"green":0.95,"blue":0.95}, "textFormat": {"bold":True}}},
+            "fields": "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat"
+        }
+    }]
     hdr2 = sum_df.columns.tolist()
     ticker_groups = sum_df.groupby("Ticker").groups
     for i, (ticker, indices) in enumerate(ticker_groups.items()):
-        color_val = palette[i % len(palette)]
         for ridx in indices:
-            req2.append({"repeatCell": {"range": {"sheetId": sid2, "startRowIndex": int(ridx)+1, "endRowIndex": int(ridx)+2, "startColumnIndex": 0, "endColumnIndex": len(hdr2)}, "cell": {"userEnteredFormat": {"backgroundColor": color_val}}, "fields": "userEnteredFormat.backgroundColor"}})
+            req2.append({
+                "repeatCell": {
+                    "range": {"sheetId": sid2, "startRowIndex": ridx+1, "endRowIndex": ridx+2, "startColumnIndex": 0, "endColumnIndex": len(hdr2)},
+                    "cell": {"userEnteredFormat": {"backgroundColor": palette[i % len(palette)]}},
+                    "fields": "userEnteredFormat.backgroundColor"
+                }
+            })
     spreadsheet.batch_update({"requests": req2})
 
-print("✅ All sheets and Summary updated with dynamic ticker colors")
+print("✅ All new ticker sheets and Summary updated with dynamic colors")
