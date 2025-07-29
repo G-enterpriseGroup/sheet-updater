@@ -131,7 +131,7 @@ for ticker in new_tickers:
             "strike": row["strike"],
             "Expiration Date": row["Expiration Date"].date(),
             "Days Until Expiration": int(row["Days Until Expiration"]),
-            "Max Loss (Ask)": float(row["Max Loss (Ask)" ]),
+            "Max Loss (Ask)": float(row["Max Loss (Ask)"]),
             "Max Loss (Last)": float(row["Max Loss (Last)"])
         })
 
@@ -147,7 +147,7 @@ for ticker in new_tickers:
     spreadsheet.batch_update({"requests": requests})
 
 # Create or update Summary sheet
-ef summary_rows:
+if summary_rows:
     sum_df = pd.DataFrame(summary_rows)
     try:
         spreadsheet.del_worksheet(spreadsheet.worksheet("Summary"))
