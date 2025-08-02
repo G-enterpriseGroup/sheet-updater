@@ -34,7 +34,7 @@ tickers_ws = spreadsheet.worksheet("Tickers")
 eastern = ZoneInfo("America/New_York")
 now = datetime.now(eastern)
 timestamp = now.strftime("%m.%d.%y %H:%M")
-tickers_ws.update("D1", [[timestamp]])
+tickers_ws.update("I1", [[timestamp]])
 
 # Read tickers and identify new ones
 tickers = [t.strip() for t in tickers_ws.col_values(1) if t.strip()]
