@@ -4,6 +4,9 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from gspread_dataframe import set_with_dataframe
+import yfinance as yf
+import pandas as pd
 
 # Define required OAuth scopes for Sheets and Drive access
 SCOPES = [
@@ -19,10 +22,6 @@ creds = Credentials.from_service_account_file(
 # Authorize gspread client
 gc = gspread.authorize(creds)
 
-import yfinance as yf
-import pandas as pd
-from gspread_dataframe import set_with_dataframe
-
 # Open spreadsheet
 sheet_url = (
     "https://docs.google.com/spreadsheets/"
@@ -35,7 +34,7 @@ tickers_ws = spreadsheet.worksheet("Tickers")
 eastern = ZoneInfo("America/New_York")
 now = datetime.now(eastern)
 timestamp = now.strftime("%m.%d.%y %H:%M")
-tickers_ws.update("D1", timestamp)
+tickers_ws.update("D1", [[timestamp]])
 
 # Read tickers and identify new ones
 tickers = [t.strip() for t in tickers_ws.col_values(1) if t.strip()]
@@ -81,8 +80,8 @@ for ticker in new_tickers:
 
     # Delete old sheet if exists, then add new one
     try:
-        sheet_to_del = spreadsheet.worksheet(ticker)
-        spreadsheet.del_worksheet(sheet_to_del)
+        ws_old = spreadsheet.worksheet(ticker)
+        spreadsheet.del_worksheet(ws_old)
     except Exception:
         pass
     ws = spreadsheet.add_worksheet(
@@ -111,7 +110,7 @@ for ticker in new_tickers:
             }
         })
 
-    # Highlight Ask/Last max loss columns
+    # Highlight Max Loss columns
     for col_name in ("Max Loss (Ask)", "Max Loss (Last)"):
         idx = hdr.index(col_name)
         requests.append({
@@ -128,7 +127,7 @@ for ticker in new_tickers:
             }
         })
 
-    # Blue-fill best rows and collect summary entries
+    # Blue-fill best rows and collect summary
     rows_by_exp = {
         exp: int(sub["Max Loss (Last)"].idxmax())
         for exp, sub in df.groupby("Expiration Date")
@@ -136,8 +135,7 @@ for ticker in new_tickers:
     for ridx in rows_by_exp.values():
         requests.append({
             "repeatCell": {
-                "range": {"sheetId": sid, "startRowIndex": ridx + 1, "endRowIndex": ridx + 2,
-                           "startColumnIndex": 0, "endColumnIndex": len(hdr)},
+                "range": {"sheetId": sid, "startRowIndex": ridx + 1, "endRowIndex": ridx + 2, "startColumnIndex": 0, "endColumnIndex": len(hdr)},
                 "cell": {"userEnteredFormat": {"backgroundColor": {"red": 0.7, "green": 0.9, "blue": 1}}},
                 "fields": "userEnteredFormat.backgroundColor"
             }
@@ -149,17 +147,15 @@ for ticker in new_tickers:
             "strike": row["strike"],
             "Expiration Date": row["Expiration Date"].date(),
             "Days Until Expiration": int(row["Days Until Expiration"]),
-            "Max Loss (Ask)": float(row["Max Loss (Ask)" ]),
+            "Max Loss (Ask)": float(row["Max Loss (Ask)"]),
             "Max Loss (Last)": float(row["Max Loss (Last)"])
         })
 
     # Header row formatting
     requests.append({
         "repeatCell": {
-            "range": {"sheetId": sid, "startRowIndex": 0, "endRowIndex": 1,
-                       "startColumnIndex": 0, "endColumnIndex": len(hdr)},
-            "cell": {"userEnteredFormat": {"backgroundColor": {"red": 0.95, "green": 0.95, "blue": 0.95},
-                                             "textFormat": {"bold": True}}},
+            "range": {"sheetId": sid, "startRowIndex": 0, "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": len(hdr)},
+            "cell": {"userEnteredFormat": {"backgroundColor": {"red": 0.95, "green": 0.95, "blue": 0.95}, "textFormat": {"bold": True}}},
             "fields": "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat"
         }
     })
@@ -196,13 +192,11 @@ if summary_rows:
         {"red": 0.7, "green": 0.8, "blue": 0.9}
     ]
     req2 = []
-    # Header
+    # Header formatting for Summary
     req2.append({
         "repeatCell": {
-            "range": {"sheetId": sid2, "startRowIndex": 0, "endRowIndex": 1,
-                       "startColumnIndex": 0, "endColumnIndex": len(sum_df.columns)},
-            "cell": {"userEnteredFormat": {"backgroundColor": {"red": 0.95, "green": 0.95, "blue": 0.95},
-                                             "textFormat": {"bold": True}}},
+            "range": {"sheetId": sid2, "startRowIndex": 0, "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": len(sum_df.columns)},
+            "cell": {"userEnteredFormat": {"backgroundColor": {"red": 0.95, "green": 0.95, "blue": 0.95}, "textFormat": {"bold": True}}},
             "fields": "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat"
         }
     })
@@ -212,8 +206,7 @@ if summary_rows:
         for ridx in indices:
             req2.append({
                 "repeatCell": {
-                    "range": {"sheetId": sid2, "startRowIndex": ridx + 1, "endRowIndex": ridx + 2,
-                               "startColumnIndex": 0, "endColumnIndex": len(hdr2)},
+                    "range": {"sheetId": sid2, "startRowIndex": ridx + 1, "endRowIndex": ridx + 2, "startColumnIndex": 0, "endColumnIndex": len(hdr2)},
                     "cell": {"userEnteredFormat": {"backgroundColor": palette[i % len(palette)]}},
                     "fields": "userEnteredFormat.backgroundColor"
                 }
