@@ -21,8 +21,32 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime
 from gspread_dataframe import set_with_dataframe
+from zoneinfo import ZoneInfo
 
-# Helper functions
+# Open spreadsheet
+sheet_url = "https://docs.google.com/spreadsheets/d/1uXUn3Tl9Kd3K3gRQuiJhuaVVz5dssGmqaAcIbYD5Zrw/edit"
+spreadsheet = gc.open_by_url(sheet_url)
+
+# Access the Tickers sheet and stamp update time in D1 (MM.DD.YY HH:MM Eastern)
+tickers_ws = spreadsheet.worksheet("Tickers")
+eastern = ZoneInfo("America/New_York")
+now = datetime.now(eastern)
+timestamp = now.strftime("%m.%d.%y %H:%M")
+tickers_ws.update("D1", timestamp)
+
+# Read tickers and identify new ones
+tickers = [t.strip() for t in tickers_ws.col_values(1) if t.strip()]
+existing_titles = [ws.title for ws in spreadsheet.worksheets()]
+new_tickers = [t for t in tickers if t not in existing_titles]
+
+if not new_tickers:
+    print("✅ No new tickers to process.")
+    exit()
+
+# Prepare summary container
+summary_rows = []
+
+# Helper function for calculating losses
 def calculate_max_loss(price, df, exp_date):
     num = 100
     days = (datetime.strptime(exp_date, "%Y-%m-%d") - datetime.today()).days
@@ -42,23 +66,6 @@ def col_letter(n):
         s = chr(65 + r) + s
     return s
 
-# Open spreadsheet
-sheet_url = "https://docs.google.com/spreadsheets/d/1uXUn3Tl9Kd3K3gRQuiJhuaVVz5dssGmqaAcIbYD5Zrw/edit"
-spreadsheet = gc.open_by_url(sheet_url)
-
-# Read tickers and identify new ones
-tickers_ws = spreadsheet.worksheet("Tickers")
-tickers = [t.strip() for t in tickers_ws.col_values(1) if t.strip()]
-existing_titles = [ws.title for ws in spreadsheet.worksheets()]
-new_tickers = [t for t in tickers if t not in existing_titles]
-
-if not new_tickers:
-    print("✅ No new tickers to process.")
-    exit()
-
-# Prepare summary container
-summary_rows = []
-
 # Process each new ticker
 for ticker in new_tickers:
     tk = yf.Ticker(ticker)
@@ -75,24 +82,19 @@ for ticker in new_tickers:
     df = df.sort_values(["Expiration Date", "Max Loss (Ask)"]).reset_index(drop=True)
     df[df.select_dtypes(include="number").columns] = df.select_dtypes(include="number").round(2)
 
-    # Delete and recreate worksheet for ticker
-    try:
+    # Delete old sheet if exists, then add new sheet\ n    try:
         spreadsheet.del_worksheet(spreadsheet.worksheet(ticker))
     except Exception:
         pass
-    ws = spreadsheet.add_worksheet(
-        title=ticker,
-        rows=str(len(df) + 5),
-        cols=str(len(df.columns))
-    )
+    ws = spreadsheet.add_worksheet(title=ticker, rows=str(len(df)+5), cols=str(len(df.columns)))
     set_with_dataframe(ws, df)
 
-    # Highlight settings and batch updates
+    # Build batch_update requests for formatting
     meta = spreadsheet.fetch_sheet_metadata()["sheets"]
     sid = next(s["properties"]["sheetId"] for s in meta if s["properties"]["title"] == ticker)
     requests = []
 
-    # Hide unwanted columns
+    # Hide specific columns
     for i in [3, 5, 6, 7, 10, 12]:
         requests.append({
             "updateDimensionProperties": {
@@ -102,20 +104,18 @@ for ticker in new_tickers:
             }
         })
 
-    # Yellow-fill Ask and Last columns
-    hdr = df.columns.tolist()
+    # Highlight loss columns\ n    hdr = df.columns.tolist()
     for col_name in ("Max Loss (Ask)", "Max Loss (Last)"):
         idx = hdr.index(col_name)
         requests.append({
             "repeatCell": {
                 "range": {"sheetId": sid, "startRowIndex": 1, "endRowIndex": len(df)+1, "startColumnIndex": idx, "endColumnIndex": idx+1},
-                "cell": {"userEnteredFormat": {"backgroundColor": {"red":1, "green":1, "blue":0.6}}},
+                "cell": {"userEnteredFormat": {"backgroundColor": {"red": 1, "green": 1, "blue": 0.6}}},
                 "fields": "userEnteredFormat.backgroundColor"
             }
         })
 
-    # Blue-fill best rows and collect summary entries
-    rows_by_exp = {exp: int(sub["Max Loss (Last)"].idxmax()) for exp, sub in df.groupby("Expiration Date")}
+    # Highlight top row per expiration and collect summary\ n    rows_by_exp = {exp: int(sub["Max Loss (Last)"].idxmax()) for exp, sub in df.groupby("Expiration Date")}
     for ridx in rows_by_exp.values():
         requests.append({
             "repeatCell": {
@@ -131,7 +131,7 @@ for ticker in new_tickers:
             "strike": row["strike"],
             "Expiration Date": row["Expiration Date"].date(),
             "Days Until Expiration": int(row["Days Until Expiration"]),
-            "Max Loss (Ask)": float(row["Max Loss (Ask)"]),
+            "Max Loss (Ask)": float(row["Max Loss (Ask)" ]),
             "Max Loss (Last)": float(row["Max Loss (Last)"])
         })
 
@@ -146,8 +146,7 @@ for ticker in new_tickers:
 
     spreadsheet.batch_update({"requests": requests})
 
-# Create or update Summary sheet
-if summary_rows:
+# Create or update Summary sheet\ nif summary_rows:
     sum_df = pd.DataFrame(summary_rows)
     try:
         spreadsheet.del_worksheet(spreadsheet.worksheet("Summary"))
@@ -157,8 +156,7 @@ if summary_rows:
     set_with_dataframe(ws2, sum_df)
     ws2.freeze(rows=1)
 
-    # Color Summary rows by ticker
-    meta2 = spreadsheet.fetch_sheet_metadata()["sheets"]
+    # Color Summary rows\ n    meta2 = spreadsheet.fetch_sheet_metadata()["sheets"]
     sid2 = next(s["properties"]["sheetId"] for s in meta2 if s["properties"]["title"] == "Summary")
     palette = [
         {"red":0.9,"green":0.9,"blue":0.7},
@@ -171,7 +169,7 @@ if summary_rows:
     req2 = [{
         "repeatCell": {
             "range": {"sheetId": sid2, "startRowIndex": 0, "endRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": len(sum_df.columns)},
-            "cell": {"userEnteredFormat": {"backgroundColor": {"red":0.95,"green":0.95,"blue":0.95}, "textFormat": {"bold":True}}},
+            "cell": {"userEnteredFormat": {"backgroundColor": {"red":0.95, "green":0.95, "blue":0.95}, "textFormat": {"bold":True}}},
             "fields": "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat"
         }
     }]
