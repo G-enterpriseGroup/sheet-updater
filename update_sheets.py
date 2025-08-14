@@ -27,7 +27,7 @@ tickers_ws = ss.worksheet("Tickers")
 now = datetime.now(ZoneInfo("America/New_York"))
 tickers_ws.update(range_name="T1", values=[[now.strftime("%m.%d.%y %H:%M")]])
 
-# ── LOAD TICKERS ─────────────────────────────────────────────────────────────────
+# ── LOAD TICKERS ────────────────────────────────────────────────────────────────
 all_vals     = tickers_ws.col_values(1)
 tickers      = [t.strip() for t in all_vals[1:] if t.strip()]  # drop header row
 existing     = {ws.title for ws in ss.worksheets()}
@@ -42,10 +42,10 @@ def calculate_max_loss(price, df, exp):
     df = df.copy()
     df["Expiration Date"]       = exp
     df["Days Until Expiration"] = days
-    df["Cost of Put (Ask)"]     = df["ask"]   * num
-    df["Max Loss (Ask)"]        = df["strike"]*num - (price*num + df["Cost of Put (Ask)"])
+    df["Cost of Put (Ask)"]     = df["ask"] * num
+    df["Max Loss (Ask)"]        = df["strike"] * num - (price * num + df["Cost of Put (Ask)"])
     df["Cost of Put (Last)"]    = df["lastPrice"] * num
-    df["Max Loss (Last)"]       = df["strike"]*num - (price*num + df["Cost of Put (Last)"])
+    df["Max Loss (Last)"]       = df["strike"] * num - (price * num + df["Cost of Put (Last)"])
     return df
 
 summary_rows = []
@@ -74,6 +74,13 @@ for tkr in new_tickers:
     num_cols = df.select_dtypes("number").columns
     df[num_cols] = df[num_cols].round(2)
 
+    # ── REORDER: put Max Loss (Last) before Max Loss (Ask) ──────────────────────
+    cols = df.columns.tolist()
+    if "Max Loss (Last)" in cols and "Max Loss (Ask)" in cols:
+        cols.remove("Max Loss (Last)")
+        cols.insert(cols.index("Max Loss (Ask)"), "Max Loss (Last)")
+        df = df[cols]
+
     # remove old sheet
     try: ss.del_worksheet(ss.worksheet(tkr))
     except: pass
@@ -100,7 +107,7 @@ for tkr in new_tickers:
             }
         })
 
-    # highlight Max Loss columns yellow
+    # highlight Max Loss columns yellow (name-based, so order swap is fine)
     for col in ("Max Loss (Ask)","Max Loss (Last)"):
         c = hdr.index(col)
         reqs.append({
