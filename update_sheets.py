@@ -74,12 +74,15 @@ for tkr in new_tickers:
     num_cols = df.select_dtypes("number").columns
     df[num_cols] = df[num_cols].round(2)
 
-    # ── REORDER: put Max Loss (Last) before Max Loss (Ask) ──────────────────────
+    # ── REORDER COLUMNS ─────────────────────────────────────────────────────────
     cols = df.columns.tolist()
     if "Max Loss (Last)" in cols and "Max Loss (Ask)" in cols:
         cols.remove("Max Loss (Last)")
         cols.insert(cols.index("Max Loss (Ask)"), "Max Loss (Last)")
-        df = df[cols]
+    if "Cost of Put (Ask)" in cols:
+        cols.remove("Cost of Put (Ask)")
+        cols.append("Cost of Put (Ask)")
+    df = df[cols]
 
     # remove old sheet
     try: ss.del_worksheet(ss.worksheet(tkr))
@@ -97,17 +100,7 @@ for tkr in new_tickers:
     hdr = df.columns.tolist()
     reqs = []
 
-    # hide D,F,G,H,K,M → idx 3,5,6,7,10,12
-    for i in (3,5,6,7,10,12):
-        reqs.append({
-            "updateDimensionProperties": {
-                "range":{"sheetId":sid,"dimension":"COLUMNS","startIndex":i,"endIndex":i+1},
-                "properties":{"hiddenByUser":True},
-                "fields":"hiddenByUser"
-            }
-        })
-
-    # highlight Max Loss columns yellow (name-based, so order swap is fine)
+    # highlight Max Loss columns yellow
     for col in ("Max Loss (Ask)","Max Loss (Last)"):
         c = hdr.index(col)
         reqs.append({
