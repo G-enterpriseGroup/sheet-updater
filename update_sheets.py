@@ -25,7 +25,7 @@ ss = gc.open_by_url(SHEET_URL)
 # ── STAMP TIMESTAMP ─────────────────────────────────────────────────────────────
 tickers_ws = ss.worksheet("Tickers")
 now = datetime.now(ZoneInfo("America/New_York"))
-tickers_ws.update(range_name="N1", values=[[now.strftime("%m.%d.%y %H:%M")]])
+tickers_ws.update(range_name="T1", values=[[now.strftime("%m.%d.%y %H:%M")]])
 
 # ── LOAD TICKERS ─────────────────────────────────────────────────────────────────
 all_vals     = tickers_ws.col_values(1)
