@@ -1,4 +1,6 @@
 import os
+import time
+import random
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
@@ -6,6 +8,7 @@ from zoneinfo import ZoneInfo
 from gspread_dataframe import set_with_dataframe
 import yfinance as yf
 import pandas as pd
+from gspread.exceptions import APIError
 
 # ── AUTH ────────────────────────────────────────────────────────────────────────
 SCOPES = [
@@ -21,6 +24,41 @@ gc = gspread.authorize(creds)
 # ── OPEN SHEET ─────────────────────────────────────────────────────────────────
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1uXUn3Tl9Kd3K3gRQuiJhuaVVz5dssGmqaAcIbYD5Zrw/edit"
 ss = gc.open_by_url(SHEET_URL)
+
+# ── RATE-LIMIT SAFE BATCH UPDATE ───────────────────────────────────────────────
+def safe_batch_update(spreadsheet, requests, chunk_size=80,  # keep well under 100
+                      max_retries=8, base_sleep=1.5, jitter=0.5):
+    """
+    Sends batchUpdate requests in chunks with exponential backoff on 429 errors.
+    No-op on empty request list.
+    """
+    if not requests:
+        return
+
+    # Chunk requests to reduce per-call load
+    for i in range(0, len(requests), chunk_size):
+        chunk = requests[i:i + chunk_size]
+
+        attempt = 0
+        while True:
+            try:
+                spreadsheet.batch_update({"requests": chunk})
+                break  # success for this chunk
+            except APIError as e:
+                msg = str(e)
+                is_429 = "429" in msg or "Quota exceeded" in msg or "rateLimitExceeded" in msg
+                if not is_429:
+                    # Non-rate limit error: re-raise immediately
+                    raise
+
+                if attempt >= max_retries:
+                    # Exhausted retries: raise the original error
+                    raise
+
+                # Exponential backoff with jitter
+                sleep_for = (base_sleep * (2 ** attempt)) + random.uniform(0, jitter)
+                time.sleep(sleep_for)
+                attempt += 1
 
 # ── STAMP TIMESTAMP ─────────────────────────────────────────────────────────────
 tickers_ws = ss.worksheet("Tickers")
@@ -49,7 +87,7 @@ def calculate_max_loss(price, df, exp):
     return df
 
 summary_rows = []
-summary2_rows = []   # NEW collector for Summary 2 (all rows)
+summary2_rows = []   # collector for Summary 2 (all rows)
 
 # ── PROCESS EACH NEW TICKER ────────────────────────────────────────────────────
 for tkr in new_tickers:
@@ -170,7 +208,8 @@ for tkr in new_tickers:
         }
     })
 
-    ss.batch_update({"requests": reqs})
+    # SAFE batch update for this ticker's formatting requests
+    safe_batch_update(ss, reqs)
 
 # ── BUILD SUMMARY SHEET ─────────────────────────────────────────────────────────
 if summary_rows:
@@ -196,7 +235,7 @@ if summary_rows:
                 for s in ss.fetch_sheet_metadata()["sheets"]
                 if s["properties"]["title"] == "Summary")
 
-    # header bold
+    # header bold + alternating-by-Ticker fills (same as before)
     req2 = [{
         "repeatCell":{
             "range":{"sheetId":sid2,"startRowIndex":0,"endRowIndex":1,
@@ -209,7 +248,6 @@ if summary_rows:
         }
     }]
 
-    # alternate colors by Ticker
     palette = [
         {"red":0.9,"green":0.9,"blue":0.7},
         {"red":0.9,"green":0.7,"blue":0.9},
@@ -231,7 +269,7 @@ if summary_rows:
                 }
             })
 
-    ss.batch_update({"requests": req2})
+    safe_batch_update(ss, req2)
 
 # ── BUILD SUMMARY 2 SHEET (all rows) ───────────────────────────────────────────
 if summary2_rows:
@@ -289,6 +327,6 @@ if summary2_rows:
                 }
             })
 
-    ss.batch_update({"requests": req2b})
+    safe_batch_update(ss, req2b)
 
 print("✅ All sheets—including Summary and Summary 2—updated.")
