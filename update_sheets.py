@@ -49,6 +49,7 @@ def calculate_max_loss(price, df, exp):
     return df
 
 summary_rows = []
+summary2_rows = []   # NEW collector for Summary 2 (all rows)
 
 # ── PROCESS EACH NEW TICKER ────────────────────────────────────────────────────
 for tkr in new_tickers:
@@ -83,6 +84,18 @@ for tkr in new_tickers:
         cols.remove("Cost of Put (Ask)")
         cols.append("Cost of Put (Ask)")
     df = df[cols]
+
+    # collect ALL rows for Summary 2
+    for _, r in df.iterrows():
+        summary2_rows.append({
+            "Ticker":                 tkr,
+            "contractSymbol":         r["contractSymbol"],
+            "strike":                 float(r["strike"]),
+            "Expiration Date":        pd.to_datetime(r["Expiration Date"]).date(),
+            "Days Until Expiration":  int(r["Days Until Expiration"]),
+            "Max Loss (Ask)":         float(r["Max Loss (Ask)"]),
+            "Max Loss (Last)":        float(r["Max Loss (Last)"])
+        })
 
     # remove old sheet
     try: ss.del_worksheet(ss.worksheet(tkr))
@@ -220,4 +233,62 @@ if summary_rows:
 
     ss.batch_update({"requests": req2})
 
-print("✅ All sheets—including Summary—updated.")
+# ── BUILD SUMMARY 2 SHEET (all rows) ───────────────────────────────────────────
+if summary2_rows:
+    sum2_df = pd.DataFrame(summary2_rows)[[
+        "Ticker","contractSymbol","strike",
+        "Expiration Date","Days Until Expiration",
+        "Max Loss (Ask)","Max Loss (Last)"
+    ]]
+
+    try: ss.del_worksheet(ss.worksheet("Summary 2"))
+    except: pass
+
+    ws2b = ss.add_worksheet(
+        title="Summary 2",
+        rows=str(len(sum2_df)+5),
+        cols=str(len(sum2_df.columns))
+    )
+    set_with_dataframe(ws2b, sum2_df)
+    ws2b.freeze(rows=1)
+
+    sid2b = next(s["properties"]["sheetId"]
+                 for s in ss.fetch_sheet_metadata()["sheets"]
+                 if s["properties"]["title"] == "Summary 2")
+
+    req2b = [{
+        "repeatCell":{
+            "range":{"sheetId":sid2b,"startRowIndex":0,"endRowIndex":1,
+                     "startColumnIndex":0,"endColumnIndex":len(sum2_df.columns)},
+            "cell":{"userEnteredFormat":{
+                "backgroundColor":{"red":0.95,"green":0.95,"blue":0.95},
+                "textFormat":{"bold":True}
+            }},
+            "fields":"userEnteredFormat.backgroundColor,userEnteredFormat.textFormat"
+        }
+    }]
+
+    palette = [
+        {"red":0.9,"green":0.9,"blue":0.7},
+        {"red":0.9,"green":0.7,"blue":0.9},
+        {"red":0.7,"green":0.9,"blue":0.9},
+        {"red":0.9,"green":0.8,"blue":0.7},
+        {"red":0.8,"green":0.9,"blue":0.7},
+        {"red":0.7,"green":0.8,"blue":0.9}
+    ]
+    groups2 = sum2_df.groupby("Ticker").groups
+    for i, (_, idxs) in enumerate(groups2.items()):
+        color = palette[i % len(palette)]
+        for ridx in idxs:
+            req2b.append({
+                "repeatCell":{
+                    "range":{"sheetId":sid2b,"startRowIndex":ridx+1,"endRowIndex":ridx+2,
+                             "startColumnIndex":0,"endColumnIndex":len(sum2_df.columns)},
+                    "cell":{"userEnteredFormat":{"backgroundColor":color}},
+                    "fields":"userEnteredFormat.backgroundColor"
+                }
+            })
+
+    ss.batch_update({"requests": req2b})
+
+print("✅ All sheets—including Summary and Summary 2—updated.")
